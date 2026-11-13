@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "score": "bash frozen/score.sh",
-    "play": "echo 'Open index.html in a browser to play'"
+    "gate": "node scripts/score-gate.mjs",
+    "diverge": "node scripts/first-divergence.mjs",
+    "playability": "bash frozen/play.sh",
+    "play": "echo 'Run python3 -m http.server 8000 and open http://localhost:8000/'"
   },
   "engines": {
     "node": ">=22.0.0"
