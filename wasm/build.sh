@@ -158,7 +158,10 @@ mkdir -p "$D/save"
 for f in "$DATADIR"/*; do
     name="$(basename "$f")"
     [ -f "$f" ] || continue
+    # skip the binaries and the state the recorder harness clears before a
+    # session (scripts/record-session.mjs clearStaleState; it keeps *.lua)
     case "$name" in
+        *.lua) ;;
         nethack|recover|record|xlogfile|logfile|livelog|paniclog|perm) continue ;;
         alock.*|block.*|bon*|*.0|*wizard*|*recorder*|*agent*) continue ;;
     esac

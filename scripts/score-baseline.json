@@ -1,12 +1,12 @@
 {
-  "commit": "fd2a3f0",
-  "timestamp": "2026-11-16T19:04:17.364Z",
+  "commit": "b4579de",
+  "timestamp": "2026-11-16T19:12:47.954Z",
   "totals": {
-    "screens": 8636,
+    "screens": 11405,
     "screensTotal": 11405,
-    "rng": 654850,
+    "rng": 792838,
     "rngTotal": 792838,
-    "passed": 36,
+    "passed": 44,
     "sessions": 44
   },
   "sessions": {
@@ -59,11 +59,11 @@
       "error": null
     },
     "seed0013-friday13-save-then-fullmoon-restore.session.json": {
-      "screens": 48,
+      "screens": 99,
       "screensTotal": 99,
-      "rng": 4802,
+      "rng": 4804,
       "rngTotal": 4804,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed0013-rogue-friday13-combat.session.json": {
@@ -107,11 +107,11 @@
       "error": null
     },
     "seed0030-ten-diverse-deaths.session.json": {
-      "screens": 79,
+      "screens": 1953,
       "screensTotal": 1953,
-      "rng": 14300,
+      "rng": 105529,
       "rngTotal": 105529,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed0060-orc-rogue-kick-search.session.json": {
@@ -171,11 +171,11 @@
       "error": null
     },
     "seed0106-priest-extcmd-sweep.session.json": {
-      "screens": 266,
+      "screens": 267,
       "screensTotal": 267,
       "rng": 4194,
       "rngTotal": 4194,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed0107-samurai-twoweapon-enhance.session.json": {
@@ -211,11 +211,11 @@
       "error": null
     },
     "seed0360-wizard-world-tour.session.json": {
-      "screens": 340,
+      "screens": 833,
       "screensTotal": 833,
-      "rng": 83042,
+      "rng": 120639,
       "rngTotal": 120639,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed0361-archeologist-tour.session.json": {
@@ -315,11 +315,11 @@
       "error": null
     },
     "seed2200-wizard-quaff-zap-read.session.json": {
-      "screens": 229,
+      "screens": 230,
       "screensTotal": 230,
       "rng": 3018,
       "rngTotal": 3018,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed2600-wizard-custom-binds.session.json": {
@@ -331,27 +331,27 @@
       "error": null
     },
     "seed4500-knight-coverage.session.json": {
-      "screens": 1813,
+      "screens": 1814,
       "screensTotal": 1814,
       "rng": 108275,
       "rngTotal": 108275,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed5002-wizard-coverage-pair.session.json": {
-      "screens": 124,
+      "screens": 410,
       "screensTotal": 410,
-      "rng": 5904,
+      "rng": 12167,
       "rngTotal": 12167,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed5006-tourist-stress-disaster.session.json": {
-      "screens": 187,
+      "screens": 249,
       "screensTotal": 249,
-      "rng": 11026,
+      "rng": 13923,
       "rngTotal": 13923,
-      "passed": false,
+      "passed": true,
       "error": null
     },
     "seed8000-tourist-starter.session.json": {

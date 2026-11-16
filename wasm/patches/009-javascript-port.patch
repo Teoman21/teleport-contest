@@ -15,6 +15,40 @@ diff --git a/include/unixconf.h b/include/unixconf.h
  
  #ifndef NOSHELL
  #define SHELL /* do not delete the '!' command */
+diff --git a/src/files.c b/src/files.c
+--- a/src/files.c
++++ b/src/files.c
+@@ -1604,6 +1604,13 @@
+     boolean istty = WINDOWPORT(tty);
+ #endif
+ 
++#ifdef __EMSCRIPTEN__
++    /* JavaScript build: there is no process to fork, so save and bones
++       files stay uncompressed (the recorder's compress(1) ran silently). */
++    nhUse(filename);
++    nhUse(uncomp);
++    return;
++#endif
+ #ifdef COMPRESS_EXTENSION
+     xtra = COMPRESS_EXTENSION;
+ #else
+diff --git a/src/mdlib.c b/src/mdlib.c
+--- a/src/mdlib.c
++++ b/src/mdlib.c
+@@ -696,7 +696,13 @@
+     STOREOPTTEXT(optbuf);
+     optbuf[0] = '\0';
+     length = COLNO + 1; /* force 1st item onto new line */
++#ifdef __EMSCRIPTEN__
++    /* JavaScript build: report the data model of the build it reproduces
++       (the macOS recorder, LP64), not wasm32's ILP32. */
++    Strcpy(buf, "I32LP64 data model,");
++#else
+     Strcat(strcpy(buf, datamodel(0)), " data model,");
++#endif
+     opt_out_words(buf, &length);
+     for (i = 0; i < SIZE(build_opts); i++) {
+ #if !defined(MAKEDEFS_C) && defined(FOR_RUNTIME)
 diff --git a/src/rnd.c b/src/rnd.c
 --- a/src/rnd.c
 +++ b/src/rnd.c
@@ -67,3 +101,23 @@ diff --git a/win/tty/termcap.c b/win/tty/termcap.c
      }
  }
  
+diff --git a/win/tty/wintty.c b/win/tty/wintty.c
+--- a/win/tty/wintty.c
++++ b/win/tty/wintty.c
+@@ -836,11 +836,15 @@
+     winid i;
+ 
+     tty_suspend_nhwindows(str);
+-#ifdef NOMUX_CAPTURE
++#if defined(NOMUX_CAPTURE) && !defined(__EMSCRIPTEN__)
+     /* Raw output during suspend belongs to the teardown message stream.
+      * Do not let its shadow row counter leak into later post-window raw
+      * output such as topten.  The next raw_print will enter raw mode and
+      * clear the shadow at that actual terminal boundary. */
++    /* [JavaScript build: left out.  This reset arrived on 2026-11-14,
++     * after the public sessions were recorded; without it the final
++     * "Be seeing you..." frame keeps the cursor on the row below the
++     * text, as in sessions/seed0013-friday13-save-then-fullmoon-restore.] */
+     nomux_reset_raw_mode();
+ #endif
+     /*

@@ -187,15 +187,9 @@ export class NethackSegment {
         let nextKey = 0;
 
         // The C runtime copies the environment when it starts, so the
-        // files and variables go in from preRun, before that happens.
+        // variables go in from preRun, before that happens.
         const setup = (Mod) => {
-            const { FS, ENV } = Mod;
-            FS.mkdirTree(HOME);
-            FS.mkdirTree('/tmp');
-            FS.mkdirTree(`${HACKDIR}/save`);
-            FS.writeFile(`${HOME}/.nethackrc`, nethackrc || '');
-            restoreFiles(FS, storage);
-            Object.assign(ENV, {
+            Object.assign(Mod.ENV, {
                 HOME,
                 NETHACKDIR: HACKDIR,
                 HACKDIR,
@@ -236,7 +230,14 @@ export class NethackSegment {
                 this._pendingAnim = [];
             },
         });
+        // Files go in after start-up, when the embedded data files
+        // (js/nethack-c.js carries /nh) are in place.
         const { FS } = M;
+        FS.mkdirTree(HOME);
+        FS.mkdirTree('/tmp');
+        FS.mkdirTree(`${HACKDIR}/save`);
+        FS.writeFile(`${HOME}/.nethackrc`, nethackrc || '');
+        restoreFiles(FS, storage);
 
         try {
             this.exitStatus = M.callMain(['-u', playerName(nethackrc)]);
