@@ -1,5 +1,11 @@
 # The Teleport Coding Challenge
 
+> **This fork** compiles the recorder's own NetHack 5.0 C (and Lua) to
+> plain JavaScript with emcc and wasm2js, then matches the recorder's
+> environment (clock, terminal, data model, files). All 44 public sessions
+> pass. How it works and what it took: [`docs/METHOD.md`](docs/METHOD.md).
+
+
 *A guide to porting the Mazes of Menace from C to JavaScript, for
 adventurers traveling with a small swarm of LLM coding assistants.
 [Fork it now.](https://github.com/davidbau/teleport-contest/fork)*

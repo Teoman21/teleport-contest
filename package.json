@@ -4,6 +4,7 @@
   "description": "The Teleport Coding Challenge — Port NetHack C to JavaScript",
   "type": "module",
   "scripts": {
+    "build": "bash wasm/build.sh",
     "score": "bash frozen/score.sh",
     "gate": "node scripts/score-gate.mjs",
     "diverge": "node scripts/first-divergence.mjs",
