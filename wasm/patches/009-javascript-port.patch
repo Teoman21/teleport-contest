@@ -1,0 +1,69 @@
+diff --git a/include/unixconf.h b/include/unixconf.h
+--- a/include/unixconf.h
++++ b/include/unixconf.h
+@@ -316,7 +316,13 @@
+ 
+ #define HLOCK "perm" /* an empty file used for locking purposes */
+ 
++#ifdef __EMSCRIPTEN__
++/* JavaScript build: keystrokes come from the JS driver (wasm/jsglue.c) */
++extern int js_tgetch(void);
++#define tgetch js_tgetch
++#else
+ #define tgetch getchar
++#endif
+ 
+ #ifndef NOSHELL
+ #define SHELL /* do not delete the '!' command */
+diff --git a/src/rnd.c b/src/rnd.c
+--- a/src/rnd.c
++++ b/src/rnd.c
+@@ -130,6 +130,13 @@
+ void
+ init_isaac64(unsigned long seed, int (*fn)(int))
+ {
++#ifdef __EMSCRIPTEN__
++    /* The recordings come from an LP64 build, where unsigned long is 8
++       bytes and the ISAAC64 key is those 8 bytes.  wasm32 is ILP32, so
++       widen the seed to keep the same key (and the same PRNG stream). */
++    unsigned long long wseed = (unsigned long long) seed;
++#define seed wseed
++#endif
+     unsigned char new_rng_state[sizeof seed];
+     unsigned i;
+     int rngindx = whichrng(fn);
+@@ -143,6 +150,9 @@
+     }
+     isaac64_init(&rnglist[rngindx].rng_state, new_rng_state,
+                  (int) sizeof seed);
++#ifdef __EMSCRIPTEN__
++#undef seed
++#endif
+ }
+ 
+ staticfn int
+diff --git a/win/tty/termcap.c b/win/tty/termcap.c
+--- a/win/tty/termcap.c
++++ b/win/tty/termcap.c
+@@ -688,11 +688,21 @@
+         int cx, cy;
+         size_t scr_len = scr ? strlen(scr) : 0;
+         nomux_get_cursor(&cx, &cy);
++#ifdef __EMSCRIPTEN__
++        /* JavaScript build: hand the frame straight to the JS driver
++           instead of writing an OSC marker to stdout. */
++        {
++            extern void js_screen_marker(int, int, int, int, const char *);
++            js_screen_marker(!strcmp(kind, "input"), nomux_seq, cx, cy,
++                             scr ? scr : "");
++        }
++#else
+         fprintf(stdout, "\x1b]7777;KIND=%s;SEQ=%d;ANIM=%d;CX=%d;CY=%d;LEN=%zu\x07",
+                 kind, nomux_seq, nomux_anim_id, cx, cy, scr_len);
+         if (scr_len > 0)
+             fwrite(scr, 1, scr_len, stdout);
+         fflush(stdout);
++#endif
+     }
+ }
+ 
