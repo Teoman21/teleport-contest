@@ -1,11 +1,14 @@
 /* jsglue.c — the seam between compiled NetHack and the JavaScript driver.
  *
  * Built only into the JavaScript port (wasm/build.sh copies it into src/).
- * Three things live here:
+ * These things live here:
  *
  *   1. keystrokes:  tty input (unixconf.h maps tgetch to js_tgetch) asks
- *      the JS driver for the next key.  When the recorded keys run out the
- *      driver throws, which unwinds the whole C stack back to jsmain.js.
+ *      the JS driver for the next key.  In the replay build (js/nethack-c.js)
+ *      the driver answers at once; when the recorded keys run out it throws,
+ *      which unwinds the whole C stack back to jsmain.js.  In the play build
+ *      (js/nethack-c-play.js, compiled with NH_JS_ASYNC and Asyncify) the
+ *      read awaits a promise, so the game pauses until a key arrives.
  *   2. screens:     the recorder's nomux shadow buffer is serialized in C
  *      (nomux_capture_screen) exactly as in the recordings; termcap.c hands
  *      each frame to the driver here instead of printing an OSC marker.
@@ -22,9 +25,15 @@
 
 /* ---- 1. keystrokes ---------------------------------------------------- */
 
+#ifdef NH_JS_ASYNC
+EM_ASYNC_JS(int, js_next_key, (void), {
+    return await Module.nhNextKey();
+});
+#else
 EM_JS(int, js_next_key, (void), {
     return Module.nhNextKey();
 });
+#endif
 
 int
 js_tgetch(void)

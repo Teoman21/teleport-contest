@@ -171,15 +171,29 @@ done
 : > "$D/record"; : > "$D/xlogfile"; : > "$D/logfile"; : > "$D/perm"
 cp "$ROOT/wasm/sysconf" "$D/sysconf"
 
-# --- 6. link → js/nethack-c.js -----------------------------------------------
-echo "[6] link (wasm2js)"
-emcc $OPT "${NHOBJS[@]}" "${LUAOBJS[@]}" -o "$B/nethack-c.mjs" \
-    -sWASM=0 -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createNetHack \
-    -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=33554432 \
-    -sSTACK_SIZE=1048576 -sSUPPORT_LONGJMP=emscripten -sEXIT_RUNTIME=0 \
-    -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain,UTF8ToString \
-    -sINVOKE_RUN=0 -sDYNAMIC_EXECUTION=0 \
-    --embed-file "$D@/nh" 2>&1 | grep -v 'WASM=0 is deprecated' || true
+# --- 6. link -------------------------------------------------------------------
+# Two builds from the same objects:
+#   js/nethack-c.js       replay: keys are answered synchronously (scoring)
+#   js/nethack-c-play.js  play: Asyncify lets the key read await a promise,
+#                         so the browser can pause the game between keys
+LINKFLAGS=(-sWASM=0 -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createNetHack
+    -sENVIRONMENT=web -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=33554432
+    -sSTACK_SIZE=1048576 -sSUPPORT_LONGJMP=emscripten -sEXIT_RUNTIME=0
+    -sFORCE_FILESYSTEM=1 -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain,UTF8ToString
+    -sINVOKE_RUN=0 -sDYNAMIC_EXECUTION=0 --embed-file "$D@/nh")
+NOGLUE=()
+for o in "${NHOBJS[@]}"; do [ "$(basename "$o")" = jsglue.o ] || NOGLUE+=("$o"); done
+( cd "$T/src" && emcc $OPT "${NHFLAGS[@]}" -DNH_JS_ASYNC -c jsglue.c -o "$OBJ/jsglue-async.o" )
+
+echo "[6] link replay build (wasm2js)"
+emcc $OPT "${NHOBJS[@]}" "${LUAOBJS[@]}" -o "$B/nethack-c.mjs" "${LINKFLAGS[@]}" \
+    2>&1 | grep -v 'WASM=0 is deprecated' || true
 cp "$B/nethack-c.mjs" "$ROOT/js/nethack-c.js"
-ls -la "$ROOT/js/nethack-c.js"
-echo "[ok] built js/nethack-c.js"
+
+echo "[6] link play build (wasm2js + Asyncify)"
+emcc $OPT "${NOGLUE[@]}" "$OBJ/jsglue-async.o" "${LUAOBJS[@]}" -o "$B/nethack-c-play.mjs" \
+    "${LINKFLAGS[@]}" -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=262144 -sEXIT_RUNTIME=1 \
+    2>&1 | grep -v 'WASM=0 is deprecated' || true
+cp "$B/nethack-c-play.mjs" "$ROOT/js/nethack-c-play.js"
+ls -la "$ROOT/js/nethack-c.js" "$ROOT/js/nethack-c-play.js"
+echo "[ok] built js/nethack-c.js and js/nethack-c-play.js"

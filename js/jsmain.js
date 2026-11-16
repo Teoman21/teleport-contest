@@ -9,23 +9,35 @@
 //
 // Contest contract: runSegment(input) → object with getScreens(),
 // getRngLog(), getCursors(), getAnimationFramesByStep().  See docs/API.md.
+// Browser play (NethackGame) lives in js/play.js.
 
-import createNetHack from './nethack-c.js';
+export { NethackGame } from './play.js';
+
+// The replay build is 7 MB; load it on first use, so the browser page
+// (which plays with js/nethack-c-play.js) never fetches it.
+let replayBuild = null;
+function loadReplayBuild() {
+    replayBuild ??= import('./nethack-c.js').then(m => m.default);
+    return replayBuild;
+}
+// Outside a browser (the judge, scripts/), load it with this module.
+if (typeof window === 'undefined') await loadReplayBuild();
 
 // The recording environment (docs/recording-environment.md).  HOME shows
 // up on screen (the options help prints the config file path).
 const HOME = '/Users/davidbau/git/mazesofmenace/teleport/maud/test/comparison/c-harness/results';
-const HACKDIR = '/nh';
+export const HACKDIR = '/nh';
 const RNGLOG = '/tmp/rng.log';
 const DEFAULT_DATETIME = '20000110090000';
 
 // Files the game writes that survive into the next segment of the same
 // session, as they do in the recorder's install directory: save files,
-// bones and the score files.  Kept in the judge's storage handle under
-// this prefix, as latin1 strings.  Lock and level files of a game the
+// bones and the score files.  Kept in the storage handle (the judge's, or
+// the browser's localStorage view) as latin1 strings under "vfs:/<path>",
+// the key scheme of js/storage.js.  Lock and level files of a game the
 // harness stopped mid-play are left out: the next game finds their
 // process gone (veryold() in unixunix.c) and erases them silently.
-const STORAGE_PREFIX = 'nethack-file:';
+const STORAGE_PREFIX = 'vfs:/';
 const PERSISTENT_FILE = /^(save\/.+|bon.+|record|xlogfile|logfile|livelog|perm|paniclog)$/;
 
 // Thrown from the key callback when the recorded keys run out; it unwinds
@@ -80,7 +92,7 @@ function parseRngLog(text) {
 
 // The recorder runs `nethack -u <name>` with the name from OPTIONS=name:
 // (or an empty name, which makes the game ask "Who are you?").
-function playerName(rc) {
+export function playerName(rc) {
     for (const rawLine of String(rc || '').split('\n')) {
         const line = rawLine.trim();
         const upper = line.toUpperCase();
@@ -93,13 +105,11 @@ function playerName(rc) {
     return '';
 }
 
-// Keys are bytes in the tty's 8-bit input domain.  The recorder's pipe
+// A key is a byte in the tty's 8-bit input domain.  The recorder's pipe
 // maps CR to LF the way tmux's line discipline did (ICRNL).
-function keyBytes(moves) {
-    return Array.from(moves, ch => {
-        const c = ch.charCodeAt(0) & 0xff;
-        return c === 13 ? 10 : c;
-    });
+export function keyByte(code) {
+    const c = code & 0xff;
+    return c === 13 ? 10 : c;
 }
 
 function bytesToLatin1(bytes) {
@@ -132,25 +142,52 @@ function listFiles(FS, dir, prefix = '') {
         if (name === '.' || name === '..') continue;
         const path = `${dir}/${name}`;
         const rel = prefix + name;
-        const st = FS.stat(path);
-        if (FS.isDir(st.mode)) out.push(...listFiles(FS, path, rel + '/'));
+        if (FS.isDir(FS.stat(path).mode)) out.push(...listFiles(FS, path, rel + '/'));
         else out.push(rel);
     }
     return out;
 }
 
-// Copy saved files from the session's storage into the game's directory.
-function restoreFiles(FS, storage) {
+// ── Game set-up shared by replay (runSegment) and play (js/play.js) ──
+
+// The C runtime copies the environment when it starts, so the variables
+// go in from preRun, before that happens.
+export function environmentSetup({ seed, datetime }) {
+    return (Mod) => {
+        Object.assign(Mod.ENV, {
+            HOME,
+            NETHACKDIR: HACKDIR,
+            HACKDIR,
+            TERM: 'xterm-256color',
+            TZ: 'America/New_York',
+            NETHACK_NO_DELAY: '1',
+            NETHACK_SEED: String(seed ?? 0),
+            NETHACK_FIXED_DATETIME: datetime || DEFAULT_DATETIME,
+            NETHACK_RNGLOG: RNGLOG,
+            NOMUX_MARKERS: '1',
+            NETHACK_RAW_KEYS: '1',
+        });
+    };
+}
+
+// Files go in after start-up, when the embedded data files (the module
+// carries /nh) are in place: the rc file, then this session's saved files.
+export function installFiles(FS, { nethackrc, storage }) {
+    FS.mkdirTree(HOME);
+    FS.mkdirTree('/tmp');
+    FS.mkdirTree(`${HACKDIR}/save`);
+    FS.writeFile(`${HOME}/.nethackrc`, nethackrc || '');
     for (const k of storageKeys(storage)) {
         if (!k.startsWith(STORAGE_PREFIX)) continue;
         const rel = k.slice(STORAGE_PREFIX.length);
+        if (!PERSISTENT_FILE.test(rel)) continue;
         FS.writeFile(`${HACKDIR}/${rel}`, latin1ToBytes(storage.getItem(k) || ''));
     }
 }
 
 // Copy the game's persistent files back into storage, and drop the ones
 // the game deleted (a restored save file, used-up bones).
-function persistFiles(FS, storage) {
+export function persistFiles(FS, storage) {
     if (!storage) return;
     const present = new Set();
     for (const rel of listFiles(FS, HACKDIR)) {
@@ -159,11 +196,22 @@ function persistFiles(FS, storage) {
         storage.setItem(STORAGE_PREFIX + rel, bytesToLatin1(FS.readFile(`${HACKDIR}/${rel}`)));
     }
     for (const k of storageKeys(storage)) {
-        if (k.startsWith(STORAGE_PREFIX) && !present.has(k)) storage.removeItem(k);
+        if (k.startsWith(STORAGE_PREFIX) && !present.has(k)
+            && PERSISTENT_FILE.test(k.slice(STORAGE_PREFIX.length))) {
+            storage.removeItem(k);
+        }
     }
 }
 
-// ── One game segment ──
+export function consoleHooks() {
+    const debug = globalThis.process?.env?.NH_DEBUG;
+    return {
+        print: (s) => { if (debug) console.log('[out]', s); },
+        printErr: (s) => { if (debug) console.log('[err]', s); },
+    };
+}
+
+// ── One recorded segment, replayed ──
 
 export class NethackSegment {
     constructor(input) {
@@ -182,42 +230,22 @@ export class NethackSegment {
     getAnimationFramesByStep() { return this._anim; }
 
     async run() {
-        const { seed, datetime, nethackrc, storage } = this.input;
-        const moves = this.input.moves || '';
-        const keys = keyBytes(moves);
+        const { nethackrc, storage } = this.input;
+        const keys = Array.from(this.input.moves || '', ch => keyByte(ch.charCodeAt(0)));
         // The recorder keeps one screen for the start plus one per key.
         const expected = keys.length + 1;
         let nextKey = 0;
         // The recorder reads the PRNG log at each input frame, so a
         // segment's log ends at the last frame it kept.  Track that offset.
         let rngBytesAtLastFrame = 0;
-        let fsRef = null;
+        let FS = null;
 
-        // The C runtime copies the environment when it starts, so the
-        // variables go in from preRun, before that happens.
-        const setup = (Mod) => {
-            Object.assign(Mod.ENV, {
-                HOME,
-                NETHACKDIR: HACKDIR,
-                HACKDIR,
-                TERM: 'xterm-256color',
-                TZ: 'America/New_York',
-                NETHACK_NO_DELAY: '1',
-                NETHACK_SEED: String(seed ?? 0),
-                NETHACK_FIXED_DATETIME: datetime || DEFAULT_DATETIME,
-                NETHACK_RNGLOG: RNGLOG,
-                NOMUX_MARKERS: '1',
-                NETHACK_RAW_KEYS: '1',
-            });
-        };
-
-        const debug = globalThis.process?.env?.NH_DEBUG;
+        const createNetHack = await loadReplayBuild();
         const M = await createNetHack({
             noInitialRun: true,
             thisProgram: `${HACKDIR}/nethack`,
-            preRun: [setup],
-            print: (s) => { if (debug) console.log('[out]', s); },
-            printErr: (s) => { if (debug) console.log('[err]', s); },
+            preRun: [environmentSetup(this.input)],
+            ...consoleHooks(),
             nhNextKey: () => {
                 if (nextKey >= keys.length || this._screens.length >= expected) {
                     throw new KeysExhausted();
@@ -233,20 +261,13 @@ export class NethackSegment {
                 }
                 this._screens.push(frame.screen);
                 this._cursors.push(frame.cursor);
-                try { rngBytesAtLastFrame = fsRef.stat(RNGLOG).size; } catch { /* no calls yet */ }
+                try { rngBytesAtLastFrame = FS.stat(RNGLOG).size; } catch { /* no calls yet */ }
                 this._anim.push(this._pendingAnim);
                 this._pendingAnim = [];
             },
         });
-        // Files go in after start-up, when the embedded data files
-        // (js/nethack-c.js carries /nh) are in place.
-        const { FS } = M;
-        fsRef = FS;
-        FS.mkdirTree(HOME);
-        FS.mkdirTree('/tmp');
-        FS.mkdirTree(`${HACKDIR}/save`);
-        FS.writeFile(`${HOME}/.nethackrc`, nethackrc || '');
-        restoreFiles(FS, storage);
+        FS = M.FS;
+        installFiles(FS, { nethackrc, storage });
 
         try {
             this.exitStatus = M.callMain(['-u', playerName(nethackrc)]);
