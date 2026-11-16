@@ -65,6 +65,15 @@ The game is the recorder's own C, compiled to plain JavaScript
 4. `node scripts/score-gate.mjs` must say `OK: no regressions` before you
    commit. Then `node scripts/score-gate.mjs --update` and commit the
    baseline too.
+5. Held-out stand-ins: `tests/sessions/` holds 30 sessions recorded with
+   the local C recorder by `scripts/local-sessions.mjs` (every role, DST
+   and other dates, seeds above 2^32, options, meta keys, wizard-mode
+   level teleports, save/restore/quit chains). Score them with
+   `NETHACK_JS_REALTIME=1 node frozen/ps_test_runner.mjs tests/sessions`
+   (the switch makes the JS read the real clock, as the local recorder
+   does). Expect 28/30: local28 and local29 end on a save, where the local
+   recorder captures `--More--` but the official recorder (seed0013) shows
+   "Be seeing you...", which the JS matches.
 
 ## Parity notes (each one was a real mismatch)
 - ISAAC64 key: the recorder is LP64, so `init_isaac64` widens the seed to 8
@@ -79,6 +88,9 @@ The game is the recorder's own C, compiled to plain JavaScript
 - Each segment's PRNG log ends at its last kept frame, as the recorder
   reads it; lock files of a killed game are not carried to the next
   segment (the next game erases them because their process is gone).
+- Seeds keep 64 bits as on the recorder (`strtoull`, rnd.c and nhlua.c).
+- The judge drops recorded steps whose screen is blank (the end of a game
+  after `#quit`), so `runSegment` leaves blank frames out too.
 - Recording environment strings (HOME path, `TERM`, `TZ`) are in
   `docs/recording-environment.md`.
 

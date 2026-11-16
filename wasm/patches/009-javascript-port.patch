@@ -49,10 +49,27 @@ diff --git a/src/mdlib.c b/src/mdlib.c
      opt_out_words(buf, &length);
      for (i = 0; i < SIZE(build_opts); i++) {
  #if !defined(MAKEDEFS_C) && defined(FOR_RUNTIME)
+diff --git a/src/nhlua.c b/src/nhlua.c
+--- a/src/nhlua.c
++++ b/src/nhlua.c
+@@ -3103,7 +3103,13 @@
+         {
+             const char *env_seed = nh_getenv("NETHACK_SEED");
+             if (env_seed) {
++#ifdef __EMSCRIPTEN__
++                /* JavaScript build: unsigned long is 32 bits here, 64 on the
++                   LP64 recorder; parse at the recorder's width */
++                unsigned long long seed = strtoull(env_seed, NULL, 10);
++#else
+                 unsigned long seed = strtoul(env_seed, NULL, 10);
++#endif
+                 lua_getfield(L, -1, "randomseed");
+                 lua_pushinteger(L, (lua_Integer) seed);
+                 lua_call(L, 1, 0);
 diff --git a/src/rnd.c b/src/rnd.c
 --- a/src/rnd.c
 +++ b/src/rnd.c
-@@ -130,6 +130,13 @@
+@@ -130,6 +130,25 @@
  void
  init_isaac64(unsigned long seed, int (*fn)(int))
  {
@@ -61,12 +78,24 @@ diff --git a/src/rnd.c b/src/rnd.c
 +       bytes and the ISAAC64 key is those 8 bytes.  wasm32 is ILP32, so
 +       widen the seed to keep the same key (and the same PRNG stream). */
 +    unsigned long long wseed = (unsigned long long) seed;
++    {
++        /* A seed from NETHACK_SEED keeps all 64 bits on the recorder; the
++           32-bit unsigned long passed in holds only the low half. */
++        const char *env_seed = getenv("NETHACK_SEED");
++
++        if (env_seed) {
++            unsigned long long full = strtoull(env_seed, NULL, 10);
++
++            if ((unsigned long) full == seed)
++                wseed = full;
++        }
++    }
 +#define seed wseed
 +#endif
      unsigned char new_rng_state[sizeof seed];
      unsigned i;
      int rngindx = whichrng(fn);
-@@ -143,6 +150,9 @@
+@@ -143,6 +162,9 @@
      }
      isaac64_init(&rnglist[rngindx].rng_state, new_rng_state,
                   (int) sizeof seed);
@@ -76,6 +105,22 @@ diff --git a/src/rnd.c b/src/rnd.c
  }
  
  staticfn int
+diff --git a/sys/unix/unixmain.c b/sys/unix/unixmain.c
+--- a/sys/unix/unixmain.c
++++ b/sys/unix/unixmain.c
+@@ -818,7 +818,12 @@
+     {
+         const char *env_seed = getenv("NETHACK_SEED");
+         if (env_seed) {
++#ifdef __EMSCRIPTEN__
++            /* low 32 bits; init_isaac64() recovers the rest (rnd.c) */
++            unsigned long seed = (unsigned long) strtoull(env_seed, NULL, 10);
++#else
+             unsigned long seed = strtoul(env_seed, NULL, 10);
++#endif
+             return seed;
+         }
+     }
 diff --git a/win/tty/termcap.c b/win/tty/termcap.c
 --- a/win/tty/termcap.c
 +++ b/win/tty/termcap.c

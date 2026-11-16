@@ -272,16 +272,29 @@ int errno;
  * time; shopkeeper names (ubirthday / 257) depend on that hour.
  */
 
+#include <stdlib.h>
 #include <time.h>
 
 #define NH_JS_NOW ((time_t) 1777723200) /* 2026-05-02 12:00:00 UTC */
 
+/* Test switch, never set by the judge: with NETHACK_JS_REALTIME the real
+   clock is used instead, to compare against sessions recorded today with
+   the local recorder (scripts/local-sessions.mjs). */
 time_t
 time(time_t *t)
 {
+    static int realtime = -1;
+    time_t now = NH_JS_NOW;
+
+    if (realtime < 0) {
+        const char *ev = getenv("NETHACK_JS_REALTIME");
+        realtime = (ev && *ev && *ev != '0');
+    }
+    if (realtime)
+        now = (time_t) (emscripten_date_now() / 1000.0);
     if (t)
-        *t = NH_JS_NOW;
-    return NH_JS_NOW;
+        *t = now;
+    return now;
 }
 
 static long long

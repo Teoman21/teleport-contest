@@ -167,6 +167,8 @@ export function environmentSetup({ seed, datetime }) {
             NOMUX_MARKERS: '1',
             NETHACK_RAW_KEYS: '1',
         });
+        // Test switch for local recordings (see time() in wasm/jsglue.c).
+        if (globalThis.process?.env?.NETHACK_JS_REALTIME) Mod.ENV.NETHACK_JS_REALTIME = '1';
     };
 }
 
@@ -221,6 +223,7 @@ export class NethackSegment {
         this._anim = [];
         this._pendingAnim = [];
         this._rng = [];
+        this._steps = 0;
         this.exitStatus = null;
     }
 
@@ -247,20 +250,27 @@ export class NethackSegment {
             preRun: [environmentSetup(this.input)],
             ...consoleHooks(),
             nhNextKey: () => {
-                if (nextKey >= keys.length || this._screens.length >= expected) {
+                if (nextKey >= keys.length || this._steps >= expected) {
                     throw new KeysExhausted();
                 }
                 return keys[nextKey++];
             },
             nhFrame: (isInput, seq, cx, cy, payload) => {
-                if (this._screens.length >= expected) return;
+                if (this._steps >= expected) return;
                 const frame = { screen: encodeScreen(payload), cursor: [cx, cy, 1] };
                 if (!isInput) {
                     this._pendingAnim.push(frame);
                     return;
                 }
-                this._screens.push(frame.screen);
-                this._cursors.push(frame.cursor);
+                this._steps++;
+                // The judge keeps a recorded step's screen only when it is
+                // non-empty (`if (step.screen)` in frozen/ps_test_runner.mjs),
+                // so a blank frame (the end of a game after #quit) is left
+                // out here too, or every later screen would be off by one.
+                if (frame.screen) {
+                    this._screens.push(frame.screen);
+                    this._cursors.push(frame.cursor);
+                }
                 try { rngBytesAtLastFrame = FS.stat(RNGLOG).size; } catch { /* no calls yet */ }
                 this._anim.push(this._pendingAnim);
                 this._pendingAnim = [];

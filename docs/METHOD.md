@@ -73,6 +73,25 @@ the harness killed are not carried to the next segment, because the next
 game sees their process is gone and erases them silently (`veryold()` in
 `unixunix.c`).
 
+## Testing beyond the public sessions
+
+The held-out sessions can only be scored by the judge, so
+`scripts/local-sessions.mjs` records 30 more with the local C recorder
+(`tests/sessions/`): every role and race, dates on both sides of each DST
+rule change, midnight and night hours, seeds above 2^32, plain ASCII and
+no-color option sets, menu colors and status highlights, meta keys,
+wizard-mode level teleports, and save → restore → quit chains. The first
+run passed 16 of 30 and found two problems the public set never shows:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| 11 sessions wrong from the first call | seeds above 2^32−1: wasm32's `strtoul` saturates at 32 bits | parse `NETHACK_SEED` with `strtoull` (ISAAC64 key and Lua's `math.randomseed`) |
+| Every screen after a `#quit` off by one | the game ends on a blank frame; the judge skips recorded steps with an empty screen but kept ours | leave blank frames out, as the judge does |
+
+Now 28 of 30 pass; the two left end on a save, where the local recorder
+shows a `--More--` that the official recordings do not (a known local
+recorder difference; the JS matches the official seed0013).
+
 The terminal is the other environment piece. The tty code branches on
 termcap capabilities (256 colors, alternate character set, clear to end of
 screen), so `wasm/jsglue.c` serves the xterm-256color values dumped from
