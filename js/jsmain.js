@@ -19,11 +19,14 @@ const HACKDIR = '/nh';
 const RNGLOG = '/tmp/rng.log';
 const DEFAULT_DATETIME = '20000110090000';
 
-// Files the game writes that must survive into the next segment of the
-// same session (save files, bones, the score list).  Kept in the judge's
-// storage handle under this prefix, as latin1 strings.
+// Files the game writes that survive into the next segment of the same
+// session, as they do in the recorder's install directory: save files,
+// bones and the score files.  Kept in the judge's storage handle under
+// this prefix, as latin1 strings.  Lock and level files of a game the
+// harness stopped mid-play are left out: the next game finds their
+// process gone (veryold() in unixunix.c) and erases them silently.
 const STORAGE_PREFIX = 'nethack-file:';
-const PERSISTENT_FILE = /^(save\/.+|bon.+|record|xlogfile|logfile|livelog|perm)$/;
+const PERSISTENT_FILE = /^(save\/.+|bon.+|record|xlogfile|logfile|livelog|perm|paniclog)$/;
 
 // Thrown from the key callback when the recorded keys run out; it unwinds
 // the C stack back to runSegment, like the harness killing the recorder.
@@ -185,6 +188,10 @@ export class NethackSegment {
         // The recorder keeps one screen for the start plus one per key.
         const expected = keys.length + 1;
         let nextKey = 0;
+        // The recorder reads the PRNG log at each input frame, so a
+        // segment's log ends at the last frame it kept.  Track that offset.
+        let rngBytesAtLastFrame = 0;
+        let fsRef = null;
 
         // The C runtime copies the environment when it starts, so the
         // variables go in from preRun, before that happens.
@@ -226,6 +233,7 @@ export class NethackSegment {
                 }
                 this._screens.push(frame.screen);
                 this._cursors.push(frame.cursor);
+                try { rngBytesAtLastFrame = fsRef.stat(RNGLOG).size; } catch { /* no calls yet */ }
                 this._anim.push(this._pendingAnim);
                 this._pendingAnim = [];
             },
@@ -233,6 +241,7 @@ export class NethackSegment {
         // Files go in after start-up, when the embedded data files
         // (js/nethack-c.js carries /nh) are in place.
         const { FS } = M;
+        fsRef = FS;
         FS.mkdirTree(HOME);
         FS.mkdirTree('/tmp');
         FS.mkdirTree(`${HACKDIR}/save`);
@@ -246,7 +255,8 @@ export class NethackSegment {
         }
 
         try {
-            this._rng = parseRngLog(FS.readFile(RNGLOG, { encoding: 'utf8' }));
+            const log = FS.readFile(RNGLOG).subarray(0, rngBytesAtLastFrame);
+            this._rng = parseRngLog(new TextDecoder().decode(log));
         } catch {
             this._rng = [];
         }
